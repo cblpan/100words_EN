@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SRS TOEIC Master</title>
+    <title>SRS TOEIC Master (Login)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -17,10 +17,6 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
         .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
-        .perspective-1000 { perspective: 1000px; }
-        .preserve-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -102,7 +98,7 @@
         const CEFR_100_SEED = [
             {term:"abandon",definition:"버리다, 포기하다",level:"B2"},{term:"ability",definition:"능력, 재능",level:"A2"},{term:"absolute",definition:"절대적인",level:"B2"},{term:"abstract",definition:"추상적인",level:"C1"},{term:"accumulate",definition:"축적하다",level:"C1"},
             {term:"barrier",definition:"장벽",level:"B2"},{term:"calculate",definition:"계산하다",level:"B2"},{term:"campaign",definition:"캠페인",level:"C1"},{term:"debate",definition:"토론",level:"B2"},{term:"decade",definition:"10년",level:"B1"},
-            // ... Data truncated for brevity, same as before ...
+            // ... (생략)
             {term:"effort",definition:"노력",level:"B1"},{term:"factory",definition:"공장",level:"A2"},{term:"gather",definition:"모이다",level:"B1"},{term:"habit",definition:"습관",level:"A2"},{term:"identical",definition:"동일한",level:"B2"}
         ];
 
@@ -174,13 +170,11 @@
             const width = 300, height = 150, pX = 30, pY = 20;
             const cH = height - pY * 2, cW = width - pX * 2;
             const maxVal = 100;
-
             const points = data.map((d, i) => {
                 const x = pX + (i * cW) / (data.length - 1 || 1);
                 const y = height - pY - ((d.value / maxVal) * cH);
                 return `${x},${y}`;
             }).join(' ');
-
             return (
                 <div className="w-full h-40 overflow-hidden">
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
@@ -203,7 +197,7 @@
             );
         };
 
-        // --- Login Component ---
+        // --- Login Component (복구됨) ---
         const LoginView = ({ setMode }) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -266,7 +260,7 @@
             const [user, setUser] = useState(null);
             
             // Data States
-            const [dueWords, setDueWords] = useState([]);
+            const [dueWords, setDueWords] = useState([]); 
             const [wrongWords, setWrongWords] = useState([]);
             const [historyData, setHistoryData] = useState({});
             const [streak, setStreak] = useState(0);
@@ -325,6 +319,17 @@
                 const unsubDue = onSnapshot(qDue, (snap) => {
                     const due = snap.docs.map(d => ({id: d.id, ...d.data()}));
                     setDueWords(due);
+                    if (!initialLoadComplete.current) {
+                        initialLoadComplete.current = true;
+                        setMode('dashboard');
+                        if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
+                    }
+                }, (err) => {
+                    console.error("Load Error:", err);
+                    if (!initialLoadComplete.current) {
+                         initialLoadComplete.current = true;
+                         setMode('dashboard');
+                    }
                 });
 
                 const unsubHistory = onSnapshot(query(collection(db, 'artifacts', appId, 'users', user.uid, 'history')), (snap) => {
@@ -339,19 +344,7 @@
                 return () => { unsubDue(); unsubHistory(); unsubWrong(); };
             }, [user]);
 
-            useEffect(() => {
-                let interval = null;
-                if (isActive && timeLeft > 0) interval = setInterval(() => setTimeLeft(t => t-1), 1000);
-                else if (timeLeft === 0) { clearInterval(interval); handleTimeout(); }
-                return () => clearInterval(interval);
-            }, [isActive, timeLeft]);
-
-            const handleTimeout = () => {
-                setIsActive(false);
-                alert(mode === 'study' ? "암기 종료! 시험 시작" : "시험 종료! 제출");
-                if (mode === 'study') startTest(); else submitTest();
-            };
-
+            // Auto-fetch definitions
             useEffect(() => {
                 if (mode === 'study' && currentTestWords.length > 0) {
                     const fetchMissing = async () => {
@@ -377,6 +370,19 @@
                 }
             }, [mode, currentTestWords]);
 
+            useEffect(() => {
+                let interval = null;
+                if (isActive && timeLeft > 0) interval = setInterval(() => setTimeLeft(t => t-1), 1000);
+                else if (timeLeft === 0) { clearInterval(interval); handleTimeout(); }
+                return () => clearInterval(interval);
+            }, [isActive, timeLeft]);
+
+            const handleTimeout = () => {
+                setIsActive(false);
+                alert(mode === 'study' ? "암기 종료! 시험 시작" : "시험 종료! 제출");
+                if (mode === 'study') startTest(); else submitTest();
+            };
+
             const seedData = async () => {
                 if(!user) return;
                 setIsUploading(true); setUploadProgress(10);
@@ -400,7 +406,7 @@
                 setTotalWordsCount(0); setDueWords([]); setUploadProgress(100);
                 setTimeout(()=> { setIsUploading(false); setUploadProgress(0); }, 1000);
             };
-            
+
             const handleGitHubSeed = async () => {
                 if(!user) return;
                 if(!confirm("GitHub에서 데이터를 받아오시겠습니까?")) return;
@@ -555,6 +561,9 @@
             };
 
             const handleSignOut = () => { signOut(auth).then(() => setMode('login')); };
+
+            const LevelBadge = ({level}) => <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border block w-fit mt-1 ${level==='C2'?'bg-red-50 text-red-600 border-red-100':level==='C1'?'bg-orange-50 text-orange-600 border-orange-100':'bg-blue-50 text-blue-600 border-blue-100'}`}>{level||'?'}</span>;
+            const StatBadge = ({correct, total}) => total ? <span className={`text-[10px] font-mono px-1 rounded border block w-fit mt-1 ${correct/total>=0.8?'text-green-600 border-green-100 bg-green-50':'text-red-500 border-red-100 bg-red-50'}`}>{Math.round((correct/total)*100)}%</span> : <span className="text-[10px] bg-slate-100 text-slate-400 px-1 rounded block w-fit mt-1 border border-slate-200">New</span>;
 
             // --- Render ---
             if (appError) return <div className="flex flex-col items-center justify-center h-screen text-center p-4"><AlertCircle className="text-red-500 mb-4" size={48} /><p className="text-slate-500 mb-6 max-w-md">{appError}</p><button onClick={()=>window.location.reload()} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold">새로고침</button></div>;
