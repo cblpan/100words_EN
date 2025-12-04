@@ -452,32 +452,67 @@
                 finally { setIsUploading(false); setUploadStatus(''); setUploadProgress(0); }
             };
 
+// [수정됨] 고속 업로드 & 데이터 오류 방지 버전
             const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
-                setIsUploading(true); setUploadProgress(5); setUploadStatus('읽는 중...');
+                
+                setIsUploading(true); 
+                setUploadProgress(0); 
+                setUploadStatus('데이터 분석 중...');
+
                 const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const data = parseCSV(evt.target.result);
-                        setUploadStatus(`${data.length}개 저장...`);
-                        const BATCH_SIZE = 500;
-                        const batches = [];
-                        for (let i = 0; i < data.length; i += BATCH_SIZE) batches.push(data.slice(i, i + BATCH_SIZE));
-                        let completed = 0;
-                        for (const chunk of batches) {
+                        if (data.length === 0) throw new Error("데이터가 없습니다.");
+
+                        setUploadStatus(`${data.length}개 데이터 고속 업로드 시작...`);
+
+                        // 1. 데이터를 450개씩 묶음 (Firestore 한계 고려)
+                        const BATCH_SIZE = 450;
+                        const chunks = [];
+                        for (let i = 0; i < data.length; i += BATCH_SIZE) {
+                            chunks.push(data.slice(i, i + BATCH_SIZE));
+                        }
+
+                        // 2. 병렬 처리 (속도 향상의 핵심)
+                        // 하나 끝나길 기다리지 않고 동시에 여러 트럭을 출발시킵니다.
+                        let completedBatches = 0;
+                        
+                        const uploadPromises = chunks.map(async (chunk) => {
                             const batch = writeBatch(db);
                             chunk.forEach(w => {
                                 const ref = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'vocabulary'));
-                                batch.set(ref, { ...w, createdAt: serverTimestamp(), correctCount: 0, totalAttempts: 0, interval: 0, nextReviewDate: new Date() });
+                                // ★ 멈춤 방지: 값이 없으면 빈 문자열이라도 넣어서 에러를 막음
+                                batch.set(ref, { 
+                                    term: w.term || 'Unknown', 
+                                    definition: w.definition || 'No Definition', 
+                                    level: w.level || '?',
+                                    createdAt: serverTimestamp(), 
+                                    correctCount: 0, totalAttempts: 0, interval: 0, nextReviewDate: new Date() 
+                                });
                             });
-                            await batch.commit();
-                            completed++;
-                            setUploadProgress(Math.round((completed / batches.length) * 100));
-                        }
+                            await batch.commit(); // 전송
+                            
+                            // 진행률 갱신
+                            completedBatches++;
+                            setUploadProgress(Math.round((completedBatches / chunks.length) * 100));
+                        });
+
+                        // 모든 병렬 작업이 끝날 때까지 대기
+                        await Promise.all(uploadPromises);
+
                         setTotalWordsCount(prev => prev + data.length);
-                    } catch (err) { alert("오류"); }
-                    finally { setIsUploading(false); setUploadStatus(''); setUploadProgress(0); }
+                        alert("업로드 성공! (고속 처리 완료)");
+
+                    } catch (err) { 
+                        console.error(err); 
+                        alert("업로드 중 문제가 발생했습니다: " + err.message);
+                    } finally { 
+                        setIsUploading(false); setUploadStatus(''); setUploadProgress(0); 
+                        if(fileInputRef.current) fileInputRef.current.value = ''; 
+                    }
                 };
                 reader.readAsText(file);
             };
@@ -781,5 +816,6 @@
     </script>
 </body>
 </html>
+
 
 
