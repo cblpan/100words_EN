@@ -503,6 +503,21 @@
 
             const startTest = () => { setMode('test'); if(!isRetest) setTimeLeft(600); setIsActive(true); setUserAnswers({}); window.scrollTo(0,0); };
 
+            const formatTime = (seconds) => {
+                const m = Math.max(0, Math.floor(seconds / 60)).toString().padStart(2, '0');
+                const s = Math.max(0, seconds % 60).toString().padStart(2, '0');
+                return `${m}:${s}`;
+            };
+
+            const checkAnswer = (answer, definition) => {
+                const user = (answer || '').trim().toLowerCase();
+                const expected = (definition || '').trim().toLowerCase();
+                if (!user) return { isCorrect: false, similarity: 0 };
+                if (expected && expected.includes(user)) return { isCorrect: true, similarity: 1 };
+                const similarity = getSimilarity(user, expected);
+                return { isCorrect: similarity >= 0.6, similarity };
+            };
+
             const submitTest = async (e) => {
                 if(e) e.preventDefault();
                 setIsActive(false);
@@ -537,6 +552,10 @@
                 } catch (err) { console.error("Save failed", err); }
             };
 
+            const handleAnswerChange = (wordId, value) => {
+                setUserAnswers(prev => ({ ...prev, [wordId]: value }));
+            };
+
             const handleSearch = async () => {
                 if(!searchTerm) return;
                 setSearchResult({ term: searchTerm, definition: "검색 중...", level: '...' });
@@ -554,6 +573,308 @@
             };
 
             const handleSignOut = () => { signOut(auth).then(() => setMode('login')); };
+
+            const DashboardView = () => {
+                const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+                const chartDays = chartTab === 'month' ? 30 : 7;
+                const chartData = (() => {
+                    const result = [];
+                    for (let i = chartDays - 1; i >= 0; i--) {
+                        const d = new Date();
+                        d.setDate(d.getDate() - i);
+                        const key = d.toISOString().split('T')[0];
+                        result.push({
+                            label: chartTab === 'week' ? dayLabels[d.getDay()] : `${d.getMonth() + 1}/${d.getDate()}`,
+                            value: historyData[key]?.percent || 0
+                        });
+                    }
+                    return result;
+                })();
+                const duePreview = dueWords.slice(0, 8);
+                const wrongPreview = wrongWords.slice(0, 5);
+                const todayLabel = currentDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+
+                return (
+                    <div className="max-w-6xl mx-auto px-4 pt-16 pb-10 space-y-8">
+                        <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload}/>
+                        <section className="bg-white border border-slate-100 rounded-3xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-sm">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{todayLabel}</p>
+                                <h2 className="text-2xl md:text-3xl font-black text-slate-800 mt-1">환영합니다, {user?.email?.split('@')[0] || '학습자'}님!</h2>
+                                <p className="text-sm text-slate-500 mt-2">오늘 복습 예정 단어 {dueWords.length}개, 바로 시작해볼까요?</p>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <button onClick={startRoutine} className="px-5 py-3 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors">오늘의 루틴 시작</button>
+                                <button onClick={() => setMode('dictionary')} className="px-5 py-3 bg-white border border-slate-200 text-slate-600 font-semibold rounded-2xl hover:border-indigo-200 hover:text-indigo-500 transition-colors">사전 보기</button>
+                            </div>
+                        </section>
+
+                        {isUploading && (
+                            <section className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                                <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
+                                    <span>업로드 중... {uploadStatus || ''}</span>
+                                    <span className="font-semibold text-indigo-600">{uploadProgress}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-white rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 transition-all" style={{ width: `${uploadProgress}%` }}></div>
+                                </div>
+                            </section>
+                        )}
+
+                        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            {[
+                                { label: '오늘 복습', value: dueWords.length, icon: <Clock size={18}/> },
+                                { label: '틀린 단어', value: wrongWords.length, icon: <AlertCircle size={18}/> },
+                                { label: '전체 단어', value: totalWordsCount, icon: <Book size={18}/> },
+                                { label: '연속 학습', value: `${streak}일`, icon: <Flame size={18}/> },
+                            ].map((card, idx) => (
+                                <div key={idx} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex items-center gap-4">
+                                    <div className="p-3 rounded-xl bg-slate-50 text-indigo-600">{card.icon}</div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-semibold uppercase">{card.label}</p>
+                                        <p className="text-2xl font-black text-slate-800 mt-1">{card.value}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </section>
+
+                        <section className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <p className="text-xs text-slate-400 font-semibold uppercase">진행률</p>
+                                    <h3 className="text-xl font-bold text-slate-800 mt-1">최근 {chartTab === 'week' ? '7일' : '30일'} 학습 기록</h3>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={()=>setChartTab('week')} className={`px-3 py-1 text-xs font-bold rounded-full border ${chartTab==='week' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200'}`}>주간</button>
+                                    <button onClick={()=>setChartTab('month')} className={`px-3 py-1 text-xs font-bold rounded-full border ${chartTab==='month' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200'}`}>월간</button>
+                                </div>
+                            </div>
+                            <SimpleLineChart data={chartData} />
+                        </section>
+
+                        <section className="grid gap-6 lg:grid-cols-2">
+                            <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-slate-800">오늘 복습 대상</h3>
+                                    <span className="text-xs text-slate-400 font-semibold">{dueWords.length} words</span>
+                                </div>
+                                {duePreview.length === 0 ? (
+                                    <p className="text-sm text-slate-400">오늘 복습할 단어가 없습니다. 새로운 단어를 추가해보세요.</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                                        {duePreview.map((word) => (
+                                            <div key={word.id} className="border border-slate-100 rounded-2xl p-3 hover:border-indigo-100 transition-colors">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-bold text-slate-800">{word.term}</span>
+                                                    <span className="text-xs text-slate-400">{word.level || '??'}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-500 line-clamp-2">{word.definition || '뜻 없음'}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                    <button onClick={startRoutine} className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl">바로 학습</button>
+                                    <button onClick={()=>setMode('dictionary')} className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold rounded-xl">사전 검색</button>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-slate-800">틀린 단어</h3>
+                                    <button onClick={startWrongRetest} disabled={wrongWords.length===0} className={`px-3 py-1 text-xs font-bold rounded-full ${wrongWords.length===0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 text-indigo-600'}`}>재시험</button>
+                                </div>
+                                {wrongPreview.length === 0 ? (
+                                    <p className="text-sm text-slate-400">최근에 틀린 단어가 없습니다. 훌륭해요!</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                                        {wrongPreview.map((word) => (
+                                            <div key={word.id} className="border border-rose-100 rounded-2xl p-3 bg-rose-50/50">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-bold text-rose-600">{word.term}</span>
+                                                    <span className="text-xs text-rose-400">{word.lastMissed}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-500">{word.definition || '뜻 없음'}</p>
+                                                {word.userWrongAnswer && <p className="text-xs text-slate-400 mt-1">내 답: {word.userWrongAnswer}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mt-6 flex flex-wrap gap-3">
+                                    <button onClick={()=>setMode('wrong_review')} className="px-4 py-2 bg-white border border-slate-200 text-sm font-bold rounded-xl">틀린 단어 관리</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
+                            <div className="flex flex-wrap gap-3 items-center mb-4">
+                                <h3 className="text-lg font-bold text-slate-800 flex-1">데이터 관리</h3>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <button onClick={seedData} className="px-4 py-2 bg-slate-100 text-sm font-semibold rounded-xl hover:bg-slate-200">샘플 100단어 추가</button>
+                                <button onClick={handleGitHubSeed} className="px-4 py-2 bg-slate-100 text-sm font-semibold rounded-xl hover:bg-slate-200">GitHub CSV 불러오기</button>
+                                <button onClick={()=>fileInputRef.current?.click()} className="px-4 py-2 bg-slate-100 text-sm font-semibold rounded-xl hover:bg-slate-200 flex items-center gap-2"><UploadCloud size={14}/>파일 업로드</button>
+                                <button onClick={clearData} className="px-4 py-2 bg-rose-100 text-rose-600 text-sm font-semibold rounded-xl hover:bg-rose-200">전체 삭제</button>
+                            </div>
+                        </section>
+                    </div>
+                );
+            };
+
+            const renderStudyView = () => (
+                <div className="max-w-4xl mx-auto px-4 pt-16 pb-10 space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <button onClick={() => { setIsActive(false); setMode('dashboard'); }} className="px-4 py-2 text-sm font-bold text-slate-500 bg-white border border-slate-200 rounded-full flex items-center gap-1"><ChevronLeft size={16}/>대시보드</button>
+                        <div className="flex items-center gap-3 text-sm font-semibold text-slate-500">
+                            <span className="px-3 py-1 bg-slate-100 rounded-full">학습 모드</span>
+                            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full">남은 시간 {formatTime(timeLeft)}</span>
+                        </div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-6">
+                        <div className="flex flex-wrap gap-3">
+                            <button onClick={()=>setHideTerm(prev=>!prev)} className={`px-3 py-1 text-xs font-bold rounded-full border ${hideTerm ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{hideTerm ? '단어 보기' : '단어 숨기기'}</button>
+                            <button onClick={()=>setHideDef(prev=>!prev)} className={`px-3 py-1 text-xs font-bold rounded-full border ${hideDef ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{hideDef ? '뜻 보기' : '뜻 숨기기'}</button>
+                            <button onClick={startTest} className="px-4 py-1 text-xs font-bold rounded-full bg-indigo-600 text-white">시험 시작</button>
+                        </div>
+                        {currentTestWords.length === 0 ? (
+                            <div className="text-center text-slate-400 py-20">학습할 단어를 선택하세요.</div>
+                        ) : (
+                            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                                {currentTestWords.map((word, index) => (
+                                    <div key={word.id || index} className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
+                                        {!hideTerm && <p className="text-sm text-slate-400 font-semibold uppercase">#{index + 1}</p>}
+                                        {!hideTerm && <h4 className="text-xl font-bold text-slate-800">{word.term}</h4>}
+                                        {!hideDef && <p className="text-sm text-slate-500 mt-2">{word.definition || '뜻 없음'}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            const renderTestView = () => (
+                <div className="max-w-4xl mx-auto px-4 pt-16 pb-10 space-y-6">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <button onClick={() => { setIsActive(false); setMode('dashboard'); }} className="px-4 py-2 text-sm font-bold text-slate-500 bg-white border border-slate-200 rounded-full flex items-center gap-1"><ChevronLeft size={16}/>대시보드</button>
+                        <div className="flex items-center gap-3 text-sm font-semibold text-slate-500">
+                            <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full">시험 모드</span>
+                            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full">남은 시간 {formatTime(timeLeft)}</span>
+                        </div>
+                    </div>
+                    <form onSubmit={submitTest} className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4">
+                        {currentTestWords.length === 0 ? (
+                            <div className="text-center text-slate-400 py-20">시험에 포함된 단어가 없습니다.</div>
+                        ) : (
+                            currentTestWords.map((word, index) => (
+                                <div key={word.id || index} className="border border-slate-100 rounded-2xl p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs text-slate-400 font-semibold uppercase">#{index + 1}</p>
+                                            <h4 className="text-lg font-bold text-slate-800">{word.term}</h4>
+                                        </div>
+                                        <span className="text-xs text-slate-400">{word.level || '??'}</span>
+                                    </div>
+                                    <textarea value={userAnswers[word.id] || ''} onChange={(e)=>handleAnswerChange(word.id, e.target.value)} className="mt-3 w-full border border-slate-200 rounded-xl p-3 text-sm text-slate-600 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" rows="2" placeholder="뜻을 입력하세요"></textarea>
+                                </div>
+                            ))
+                        )}
+                        <div className="flex justify-end gap-3 pt-4">
+                            <button type="button" onClick={()=>{ setMode('study'); setIsActive(false); }} className="px-4 py-2 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl">돌아가기</button>
+                            <button type="submit" className="px-6 py-2 text-sm font-bold bg-indigo-600 text-white rounded-xl">제출하기</button>
+                        </div>
+                    </form>
+                </div>
+            );
+
+            const renderResultView = () => {
+                const total = currentTestWords.length || 1;
+                const percent = Math.round((score / total) * 100);
+                return (
+                    <div className="max-w-4xl mx-auto px-4 pt-16 pb-10 space-y-6">
+                        <div className="bg-white border border-slate-100 rounded-3xl p-6 text-center shadow-sm space-y-3">
+                            <p className="text-xs font-bold uppercase text-slate-400">시험 결과</p>
+                            <h2 className="text-4xl font-black text-slate-800">{score}/{total}</h2>
+                            <p className="text-sm text-slate-500">정답률 {percent}%</p>
+                            <div className="flex justify-center gap-3 pt-2 flex-wrap">
+                                <button onClick={startWrongRetest} className="px-4 py-2 text-sm font-bold bg-white border border-slate-200 rounded-xl">틀린 단어 재시험</button>
+                                <button onClick={()=>setMode('dashboard')} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-xl">대시보드</button>
+                            </div>
+                        </div>
+                        <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4">
+                            {currentTestWords.map((word, index) => {
+                                const res = gradedResults[word.id] || { isCorrect: false };
+                                return (
+                                    <div key={word.id || index} className={`rounded-2xl border p-4 ${res.isCorrect ? 'border-emerald-100 bg-emerald-50/50' : 'border-rose-100 bg-rose-50/50'}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs text-slate-400 font-semibold uppercase">#{index + 1}</p>
+                                                <h4 className="text-lg font-bold text-slate-800">{word.term}</h4>
+                                            </div>
+                                            <span className={`text-xs font-bold ${res.isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>{res.isCorrect ? '정답' : '오답'}</span>
+                                        </div>
+                                        <p className="text-sm text-slate-500 mt-2">정답: {word.definition || '뜻 없음'}</p>
+                                        {!res.isCorrect && (
+                                            <p className="text-sm text-slate-500 mt-1">내 답: {userAnswers[word.id] || '-'}</p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderWrongReviewView = () => (
+                <div className="max-w-4xl mx-auto px-4 pt-16 pb-10 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-black text-slate-800">틀린 단어 관리</h2>
+                        <div className="flex gap-2">
+                            <button onClick={startWrongRetest} disabled={wrongWords.length===0} className={`px-4 py-2 text-sm font-bold rounded-xl ${wrongWords.length===0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white'}`}>재시험 시작</button>
+                            <button onClick={()=>setMode('dashboard')} className="px-4 py-2 text-sm font-bold border border-slate-200 rounded-xl text-slate-600">대시보드</button>
+                        </div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
+                        {wrongWords.length === 0 ? (
+                            <p className="text-center text-slate-400 py-10">틀린 단어가 없습니다.</p>
+                        ) : (
+                            wrongWords.map((word) => (
+                                <div key={word.id} className="border border-slate-100 rounded-2xl p-4">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-lg font-bold text-slate-800">{word.term}</h4>
+                                        <span className="text-xs text-slate-400">{word.lastMissed || ''}</span>
+                                    </div>
+                                    <p className="text-sm text-slate-500 mt-1">정답: {word.definition || '뜻 없음'}</p>
+                                    {word.userWrongAnswer && <p className="text-sm text-slate-500 mt-1">내 답: {word.userWrongAnswer}</p>}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+
+            const DictionaryView = () => (
+                <div className="max-w-3xl mx-auto px-4 pt-16 pb-10 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-black text-slate-800">빠른 사전</h2>
+                        <button onClick={()=>setMode('dashboard')} className="px-4 py-2 text-sm font-bold border border-slate-200 rounded-xl text-slate-600">대시보드</button>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-3xl p-6 space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <input type="text" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300" placeholder="검색할 단어를 입력하세요"/>
+                            <button onClick={handleSearch} className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl">검색</button>
+                        </div>
+                        {searchResult && (
+                            <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50">
+                                <p className="text-xs text-slate-400 font-semibold uppercase">결과</p>
+                                <h3 className="text-2xl font-bold text-slate-800 mt-1">{searchResult.term}</h3>
+                                <p className="text-sm text-slate-500 mt-2">{searchResult.definition}</p>
+                                <p className="text-xs text-slate-400 mt-1">레벨: {searchResult.level}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
 
 
             // --- Render ---
@@ -604,5 +925,6 @@
     </script>
 </body>
 </html>
+
 
 
