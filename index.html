@@ -41,12 +41,17 @@
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
         import { getFirestore, collection, doc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot, getDocs, getCountFromServer, deleteDoc, updateDoc } from "firebase/firestore";
 
-        // ★★★ 본인의 Firebase 설정을 여기에 넣으세요 ★★★
-        const firebaseConfig = {
-             // apiKey: "AIzaSy...", 
-             // ...
-        };
 
+        // ★ 사용자 설정 적용됨 ★
+        const firebaseConfig = {
+            apiKey: "AIzaSyDPy1S4eIvDUeVpTo_aegrcQyE1uSdymfo",
+            authDomain: "word-en.firebaseapp.com",
+            projectId: "word-en",
+            storageBucket: "word-en.firebasestorage.app",
+            messagingSenderId: "16859654456",
+            appId: "1:16859654456:web:1b33cfbc12bf547c1279cd",
+            measurementId: "G-PGCSWRLVKM"
+        };
         let auth, db, appId;
         let initError = null;
 
@@ -590,3 +595,4 @@
     </script>
 </body>
 </html>
+
