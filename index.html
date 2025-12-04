@@ -633,17 +633,27 @@
 
                     const basePath = ['artifacts', appId, 'users', user.uid];
 
-                    // 1) vocabulary, history, wrong_answers 컬렉션 비우기
-                    const subCollections = ['vocabulary', 'history', 'wrong_answers'];
-                    let step = 0;
-
-                    for (const name of subCollections) {
-                        const snap = await getDocs(collection(db, ...basePath, name));
-                        if (!snap.empty) {
+                    // 컬렉션을 작은 청크(최대 300개) 단위로 반복 삭제
+                    const deleteCollectionInChunks = async (name) => {
+                        const baseCol = collection(db, ...basePath, name);
+                        let deletedAny = false;
+                        let safety = 0;
+                        while (safety < 50) { // 안전장치
+                            const snap = await getDocs(query(baseCol, limit(300)));
+                            if (snap.empty) break;
+                            deletedAny = true;
                             const batch = writeBatch(db);
                             snap.forEach(d => batch.delete(d.ref));
                             await batch.commit();
+                            safety += 1;
                         }
+                        return deletedAny;
+                    };
+
+                    const subCollections = ['vocabulary', 'history', 'wrong_answers'];
+                    let step = 0;
+                    for (const name of subCollections) {
+                        await deleteCollectionInChunks(name);
                         step += 1;
                         setUploadProgress(10 + Math.round((step / subCollections.length) * 60));
                     }
@@ -651,14 +661,18 @@
                     setUploadStatus('Firebase 계정 삭제 중...');
                     setUploadProgress(80);
 
-                    // 2) Firebase Auth 계정 삭제
+                    // Firebase Auth 계정 삭제
                     await deleteUser(auth.currentUser);
 
                     alert("계정이 성공적으로 삭제되었습니다.");
                     setMode('login');
                 } catch (err) {
                     console.error("Account delete failed", err);
-                    alert("계정 삭제 중 오류가 발생했습니다.\n다시 로그인 후 시도하거나, 잠시 뒤에 다시 시도해 주세요.");
+                    if (err?.code === 'resource-exhausted') {
+                        alert("Firestore 쓰기/삭제 할당량이 초과되어 계정 데이터를 모두 지우지 못했습니다.\n\n- 무료 플랜/프로젝트 쓰기 제한에 걸린 경우일 수 있습니다.\n- 잠시 후 다시 시도하거나, Firebase 콘솔에서 직접 데이터 삭제를 진행해 주세요.");
+                    } else {
+                        alert("계정 삭제 중 오류가 발생했습니다.\n다시 로그인 후 시도하거나, 잠시 뒤에 다시 시도해 주세요.");
+                    }
                 } finally {
                     setIsUploading(false);
                     setUploadStatus('');
@@ -850,20 +864,31 @@
             }
 
             return (
-                <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
+                <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-16">
+                    {/* 하단 중앙 계정 영역 */}
                     {mode === 'dashboard' && user && (
-                        <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
-                            <div className="hidden sm:flex flex-col items-end mr-2">
-                                <span className="text-[10px] text-slate-400 font-bold">Logged in as</span>
-                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{user.email}</span>
-                                <button onClick={handleDeleteAccount} className="mt-1 text-[10px] text-red-400 hover:text-red-600 underline-offset-2 hover:underline">
-                                    계정 탈퇴
-                                </button>
+                        <div className="fixed inset-x-0 bottom-0 bg-white/95 border-t border-slate-200 safe-area-pb shadow-lg-up z-40">
+                            <div className="max-w-3xl mx-auto flex flex-col items-center py-2 gap-1">
+                                <div className="text-[10px] text-slate-400 font-bold">Logged in as</div>
+                                <div className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mb-1">
+                                    {user.email}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleSignOut}
+                                        className="flex items-center gap-1 bg-slate-800 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm hover:bg-slate-900 transition-colors"
+                                    >
+                                        <LogOut size={14} />
+                                        <span>로그아웃</span>
+                                    </button>
+                                    <button
+                                        onClick={handleDeleteAccount}
+                                        className="text-[10px] text-red-400 hover:text-red-600 underline-offset-2 hover:underline"
+                                    >
+                                        계정 탈퇴
+                                    </button>
+                                </div>
                             </div>
-                            <button onClick={handleSignOut} className="flex items-center gap-1 bg-white px-3 py-2 rounded-full shadow-sm border border-slate-200 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors">
-                                <LogOut size={16}/>
-                                <span className="text-xs font-bold">로그아웃</span>
-                            </button>
                         </div>
                     )}
                     {mode === 'dashboard' && DashboardView()}
