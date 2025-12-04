@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SRS TOEIC Master</title>
+    <title>100 WORDS</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -234,8 +234,8 @@
                 <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-50">
                     <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
                         <div className="text-center mb-8">
-                            <h1 className="text-3xl font-black text-indigo-700 mb-2">SRS TOEIC</h1>
-                            <p className="text-slate-400 text-sm">뇌과학 기반 토익 영단어 마스터</p>
+                            <h1 className="text-3xl font-black text-indigo-700 mb-2">100 WORDS</h1>
+                            <p className="text-slate-400 text-sm">매일 100단어씩 외워 보세요!</p>
                         </div>
                         <div className="space-y-4">
                             <input type="email" placeholder="이메일" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all"/>
@@ -694,6 +694,8 @@
                 
                 const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
                 const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+                const prevYear = () => setCurrentDate(new Date(year - 1, month, 1));
+                const nextYear = () => setCurrentDate(new Date(year + 1, month, 1));
 
                 const getChartData = () => {
                     const data = []; const dateKeys = Object.keys(historyData).sort();
@@ -712,7 +714,7 @@
                 return (
                     <div className="max-w-2xl mx-auto pb-20 px-4">
                         <div className="flex justify-between items-center mt-8 mb-6">
-                            <div><h2 className="text-2xl font-black text-slate-800">SRS Master 🧠</h2><p className="text-slate-500 text-sm">빠른 로딩 & 스마트 복습</p></div>
+                            <div><h2 className="text-2xl font-black text-slate-800">100 WORDS</h2><p className="text-slate-500 text-sm">매일 100단어씩 외워 보세요!</p></div>
                             <div className="flex flex-col items-center bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100"><Flame className="text-orange-500 mb-1" size={20}/><span className="font-bold text-orange-700 text-sm">{streak}일째</span></div>
                         </div>
                         <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center mb-6">
@@ -757,7 +759,13 @@
                             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full">
                                 <div className="flex justify-between items-center mb-6 h-8 shrink-0">
                                     <h3 className="font-bold text-lg flex items-center gap-2"><CalIcon className="text-indigo-600"/> 캘린더</h3>
-                                    <div className="flex gap-1"><button onClick={prevMonth}><ChevronLeft size={16}/></button><span className="text-xs font-bold w-12 text-center">{month+1}월</span><button onClick={nextMonth}><ChevronRight size={16}/></button></div>
+                                    <div className="flex items-center gap-2 text-xs font-bold">
+                                        <button onClick={prevYear} className="px-1 py-0.5 rounded hover:bg-slate-100">-1Y</button>
+                                        <button onClick={prevMonth} className="px-1 py-0.5 rounded hover:bg-slate-100"><ChevronLeft size={16}/></button>
+                                        <span className="w-20 text-center">{year}년 {month+1}월</span>
+                                        <button onClick={nextMonth} className="px-1 py-0.5 rounded hover:bg-slate-100"><ChevronRight size={16}/></button>
+                                        <button onClick={nextYear} className="px-1 py-0.5 rounded hover:bg-slate-100">+1Y</button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-7 gap-1 text-center text-xs flex-1 content-start">
                                     {['일','월','화','수','목','금','토'].map(d=><div key={d} className="text-slate-400 font-bold py-1">{d}</div>)}
