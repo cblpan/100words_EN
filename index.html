@@ -153,6 +153,12 @@
             }).filter(Boolean);
         };
 
+        const logTiming = (label, startTime) => {
+            if (typeof performance === 'undefined' || !startTime) return;
+            const duration = (performance.now() - startTime).toFixed(1);
+            console.log(`[UploadPerf] ${label}: ${duration}ms`);
+        };
+
         const SimpleLineChart = ({ data, color = "#4f46e5" }) => {
             if (!data || data.length === 0) return <div className="h-40 flex items-center justify-center text-slate-400 text-xs bg-slate-50 rounded-xl border border-slate-100 w-full">데이터가 부족합니다</div>;
             const width = 300, height = 150, pX = 30, pY = 20;
@@ -403,18 +409,25 @@
             const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
+                const totalStart = performance?.now();
                 setIsUploading(true); setUploadProgress(0); setUploadStatus('데이터 분석 중...');
                 const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
+                        const parseStart = performance?.now();
                         const data = parseCSV(evt.target.result);
+                        logTiming('parseCSV', parseStart);
                         if (data.length === 0) throw new Error("데이터가 없습니다.");
                         setUploadStatus(`${data.length}개 데이터 고속 업로드 시작...`);
                         const BATCH_SIZE = 450;
+                        const chunkStart = performance?.now();
                         const chunks = [];
                         for (let i = 0; i < data.length; i += BATCH_SIZE) { chunks.push(data.slice(i, i + BATCH_SIZE)); }
+                        logTiming('chunking', chunkStart);
                         let completedBatches = 0;
-                        const uploadPromises = chunks.map(async (chunk) => {
+                        const uploadStart = performance?.now();
+                        const uploadPromises = chunks.map(async (chunk, index) => {
+                            const batchStart = performance?.now();
                             const batch = writeBatch(db);
                             chunk.forEach(w => {
                                 const ref = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'vocabulary'));
@@ -427,10 +440,12 @@
                                 });
                             });
                             await batch.commit();
+                            logTiming(`batch ${index + 1}`, batchStart);
                             completedBatches++;
                             setUploadProgress(Math.round((completedBatches / chunks.length) * 100));
                         });
                         await Promise.all(uploadPromises);
+                        logTiming('all batches', uploadStart);
                         setTotalWordsCount(prev => prev + data.length);
                         alert("업로드 성공! (고속 처리 완료)");
                     } catch (err) { 
@@ -438,6 +453,7 @@
                         alert("업로드 중 문제가 발생했습니다: " + err.message);
                     } finally { 
                         setIsUploading(false); setUploadStatus(''); setUploadProgress(0); 
+                        logTiming('total upload flow', totalStart);
                         if(fileInputRef.current) fileInputRef.current.value = ''; 
                     }
                 };
@@ -446,33 +462,47 @@
 
             const handleGitHubSeed = async () => {
                 if(!user || !confirm("GitHub에서 데이터를 받아오시겠습니까?")) return;
+                const totalStart = performance?.now();
                 setIsUploading(true); setUploadStatus('다운로드...'); setUploadProgress(10);
                 try {
+                    const downloadStart = performance?.now();
                     const response = await fetch(GITHUB_CSV_URL);
                     if (!response.ok) throw new Error("연결 실패");
+                    logTiming('GitHub download', downloadStart);
                     const csvText = await response.text();
                     setUploadStatus('분석...'); setUploadProgress(30);
+                    const parseStart = performance?.now();
                     const data = parseCSV(csvText);
+                    logTiming('parseCSV', parseStart);
                     setUploadStatus(`${data.length}개 고속 업로드...`);
                     const BATCH_SIZE = 450;
+                    const chunkStart = performance?.now();
                     const chunks = [];
                     for (let i = 0; i < data.length; i += BATCH_SIZE) chunks.push(data.slice(i, i + BATCH_SIZE));
+                    logTiming('chunking', chunkStart);
                     let completed = 0;
-                    const promises = chunks.map(async (chunk) => {
+                    const uploadStart = performance?.now();
+                    const promises = chunks.map(async (chunk, index) => {
+                        const batchStart = performance?.now();
                         const batch = writeBatch(db);
                         chunk.forEach(w => {
                             const ref = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'vocabulary'));
                             batch.set(ref, { ...w, createdAt: serverTimestamp(), correctCount: 0, totalAttempts: 0, interval: 0, nextReviewDate: new Date() });
                         });
                         await batch.commit();
+                        logTiming(`batch ${index + 1}`, batchStart);
                         completed++;
                         setUploadProgress(30 + Math.round((completed / chunks.length) * 70));
                     });
                     await Promise.all(promises);
+                    logTiming('all batches', uploadStart);
                     setTotalWordsCount(prev => prev + data.length);
                     alert("완료!");
                 } catch (error) { console.error(error); alert(`오류: ${error.message}`); } 
-                finally { setIsUploading(false); setUploadStatus(''); setUploadProgress(0); }
+                finally { 
+                    setIsUploading(false); setUploadStatus(''); setUploadProgress(0); 
+                    logTiming('GitHub total flow', totalStart);
+                }
             };
 
             const startRoutine = () => {
@@ -774,3 +804,4 @@
     </script>
 </body>
 </html>
+
