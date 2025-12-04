@@ -36,7 +36,7 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "firebase/app";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, deleteUser } from "firebase/auth";
         import { getFirestore, collection, doc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot, getDocs, getCountFromServer, deleteDoc, updateDoc } from "firebase/firestore";
 
         // ★ 사용자 설정 적용됨 ★
@@ -89,8 +89,7 @@
         const Loader2 = (props) => <IconBase {...props} className={props.className + " animate-spin"}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconBase>;
         const LogOut = (props) => <IconBase {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></IconBase>;
 
-        // --- Seed Data & Helpers ---
-        const CEFR_100_SEED = [{term:"abandon",definition:"버리다, 포기하다",level:"B2"},{term:"ability",definition:"능력, 재능",level:"A2"},{term:"absolute",definition:"절대적인",level:"B2"}]; // Shortened for brevity
+        // --- Helpers ---
         const GITHUB_CSV_URL = "https://raw.githubusercontent.com/cblpan/100words_EN/refs/heads/main/CEFR_10000_EN.csv";
 
         const getSimilarity = (s1, s2) => {
@@ -381,19 +380,6 @@
                 if (mode === 'study') startTest(); else submitTest();
             };
 
-            const seedData = async () => {
-                if(!user) return;
-                setIsUploading(true); setUploadProgress(10);
-                const batch = writeBatch(db);
-                CEFR_100_SEED.forEach(w => {
-                    const ref = doc(collection(db, 'artifacts', appId, 'users', user.uid, 'vocabulary'));
-                    batch.set(ref, { ...w, createdAt: serverTimestamp(), correctCount: 0, totalAttempts: 0, interval: 0, nextReviewDate: new Date() });
-                });
-                await batch.commit();
-                setTotalWordsCount(prev => prev + CEFR_100_SEED.length);
-                setUploadProgress(100); setTimeout(()=>{ setIsUploading(false); setUploadProgress(0); }, 1000);
-            };
-
             const clearData = async () => {
                 if(!user || !confirm("정말 모든 단어를 삭제하시겠습니까?")) return;
                 setIsUploading(true); setUploadProgress(50);
@@ -505,17 +491,60 @@
                 }
             };
 
-            const startRoutine = () => {
-                if (dueWords.length === 0 && totalWordsCount === 0) return alert("단어장이 비어있습니다.");
-                let sessionWords = dueWords;
-                if (sessionWords.length === 0) {
-                    if (!confirm("오늘 복습 완료! 랜덤 20개로 더 공부할까요?")) return;
-                    return alert("랜덤 학습 기능 준비중");
+            const startRoutine = async () => {
+                const todayStr = new Date().toISOString().split('T')[0];
+
+                // 하루에 한 번만 100개 학습 + 테스트 가능
+                if (historyData[todayStr]?.completed) {
+                    alert("오늘 할당된 100개 학습과 테스트를 이미 마쳤습니다.\n\n다음날 다시 학습을 시작해 주세요.\n지금은 오답 복습만 가능합니다.");
+                    return;
                 }
-                const selected = sessionWords.sort(() => Math.random() - 0.5).slice(0, 50);
+
+                // 단어장이 비어 있으면 안내
+                if (totalWordsCount === 0) {
+                    alert("단어장이 비어 있습니다.\n\n먼저 GitHub 동기화나 CSV 업로드로 단어를 추가한 뒤 학습을 시작해 주세요.");
+                    return;
+                }
+
+                // 기본은 오늘 복습 대상(dueWords)을 우선 사용
+                let sessionWords = dueWords;
+
+                // 아직 nextReviewDate 기반 복습 데이터가 없으면,
+                // 전체 vocabulary 중에서 랜덤으로 후보를 가져와서 첫 학습 세션 구성
+                if (!sessionWords || sessionWords.length === 0) {
+                    try {
+                        const snap = await getDocs(
+                            query(
+                                collection(db, 'artifacts', appId, 'users', user.uid, 'vocabulary'),
+                                limit(1000)
+                            )
+                        );
+                        const allWords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        if (!allWords.length) {
+                            alert("단어장이 비어 있습니다.\n\nGitHub 동기화 또는 CSV 업로드 후 다시 시도해 주세요.");
+                            return;
+                        }
+                        sessionWords = allWords;
+                    } catch (err) {
+                        console.error("Failed to load vocabulary for first session", err);
+                        alert("단어를 불러오는 중 오류가 발생했습니다.\n잠시 후 다시 시도해 주세요.");
+                        return;
+                    }
+                }
+
+                // 오늘 학습 세션: 최대 100개만
+                const selected = sessionWords
+                    .slice()
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, 100);
+
                 setCurrentTestWords(selected);
-                setIsRetest(false); setMode('study'); setTimeLeft(600); setIsActive(true);
-                setHideTerm(false); setHideDef(false);
+                setIsRetest(false);
+                setMode('study');
+                setTimeLeft(600);
+                setIsActive(true);
+                setHideTerm(false);
+                setHideDef(false);
             };
 
             const startWrongRetest = () => {
@@ -591,6 +620,51 @@
             };
 
             const handleSignOut = () => { signOut(auth).then(() => setMode('login')); };
+
+            const handleDeleteAccount = async () => {
+                if (!auth || !auth.currentUser || !user) return;
+                const ok = confirm("정말 계정을 완전히 삭제하시겠습니까?\n\n- 학습 기록, 단어장, 오답 노트가 모두 삭제됩니다.\n- 이 작업은 되돌릴 수 없습니다.");
+                if (!ok) return;
+
+                try {
+                    setIsUploading(true);
+                    setUploadStatus('계정 데이터 삭제 중...');
+                    setUploadProgress(10);
+
+                    const basePath = ['artifacts', appId, 'users', user.uid];
+
+                    // 1) vocabulary, history, wrong_answers 컬렉션 비우기
+                    const subCollections = ['vocabulary', 'history', 'wrong_answers'];
+                    let step = 0;
+
+                    for (const name of subCollections) {
+                        const snap = await getDocs(collection(db, ...basePath, name));
+                        if (!snap.empty) {
+                            const batch = writeBatch(db);
+                            snap.forEach(d => batch.delete(d.ref));
+                            await batch.commit();
+                        }
+                        step += 1;
+                        setUploadProgress(10 + Math.round((step / subCollections.length) * 60));
+                    }
+
+                    setUploadStatus('Firebase 계정 삭제 중...');
+                    setUploadProgress(80);
+
+                    // 2) Firebase Auth 계정 삭제
+                    await deleteUser(auth.currentUser);
+
+                    alert("계정이 성공적으로 삭제되었습니다.");
+                    setMode('login');
+                } catch (err) {
+                    console.error("Account delete failed", err);
+                    alert("계정 삭제 중 오류가 발생했습니다.\n다시 로그인 후 시도하거나, 잠시 뒤에 다시 시도해 주세요.");
+                } finally {
+                    setIsUploading(false);
+                    setUploadStatus('');
+                    setUploadProgress(0);
+                }
+            };
 
             // --- Views (Restored to Original Style) ---
             const DashboardView = () => {
@@ -779,9 +853,12 @@
                 <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
                     {mode === 'dashboard' && user && (
                         <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
-                            <div className="hidden sm:flex flex-col items-end mr-1">
+                            <div className="hidden sm:flex flex-col items-end mr-2">
                                 <span className="text-[10px] text-slate-400 font-bold">Logged in as</span>
                                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{user.email}</span>
+                                <button onClick={handleDeleteAccount} className="mt-1 text-[10px] text-red-400 hover:text-red-600 underline-offset-2 hover:underline">
+                                    계정 탈퇴
+                                </button>
                             </div>
                             <button onClick={handleSignOut} className="flex items-center gap-1 bg-white px-3 py-2 rounded-full shadow-sm border border-slate-200 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors">
                                 <LogOut size={16}/>
@@ -804,4 +881,5 @@
     </script>
 </body>
 </html>
+
 
