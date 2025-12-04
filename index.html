@@ -554,7 +554,193 @@
             };
 
             const handleSignOut = () => { signOut(auth).then(() => setMode('login')); };
+// --- 누락된 함수 및 컴포넌트 복구 ---
+            const checkAnswer = (ans, def) => {
+                try {
+                    if (!ans || !def) return { isCorrect: false };
+                    const cA = String(ans).trim().replace(/\s+/g, '').toLowerCase();
+                    const cDs = String(def).split(',').map(s => s.trim().replace(/\s+/g, '').toLowerCase());
+                    if (cDs.includes(cA)) return { isCorrect: true, type: 'exact' };
+                    for (const d of cDs) {
+                        if (d.length < 2) continue;
+                        if (getSimilarity(cA, d) >= 0.6 || (d.length>=2 && d.includes(cA))) return { isCorrect: true, type: 'similar' };
+                    }
+                    return { isCorrect: false };
+                } catch (error) { return { isCorrect: false }; }
+            };
 
+            const LevelBadge = ({level}) => <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border block w-fit mt-1 ${level==='C2'?'bg-red-50 text-red-600 border-red-100':level==='C1'?'bg-orange-50 text-orange-600 border-orange-100':'bg-blue-50 text-blue-600 border-blue-100'}`}>{level||'?'}</span>;
+            const StatBadge = ({correct, total}) => total ? <span className={`text-[10px] font-mono px-1 rounded border block w-fit mt-1 ${correct/total>=0.8?'text-green-600 border-green-100 bg-green-50':'text-red-500 border-red-100 bg-red-50'}`}>{Math.round((correct/total)*100)}%</span> : <span className="text-[10px] bg-slate-100 text-slate-400 px-1 rounded block w-fit mt-1 border border-slate-200">New</span>;
+
+            const DashboardView = () => {
+                const today = new Date();
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const daysInMonth = lastDay.getDate();
+                const startDayOfWeek = firstDay.getDay(); 
+                const days = [];
+                for(let i=0; i<startDayOfWeek; i++) days.push(null); for(let i=1; i<=daysInMonth; i++) days.push(i);
+                
+                const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+                const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+                const getChartData = () => {
+                    const data = []; const dateKeys = Object.keys(historyData).sort();
+                    if (chartTab === 'week') {
+                        const t = new Date(); for(let i=6; i>=0; i--) { const d = new Date(); d.setDate(t.getDate() - i); const k = d.toISOString().split('T')[0]; data.push({ label: `${d.getMonth()+1}/${d.getDate()}`, value: historyData[k]?.percent || 0 }); }
+                    } else if (chartTab === 'month') {
+                        const months = {}; dateKeys.forEach(k => { const m = k.substring(0, 7); if(!months[m]) months[m] = {s:0,c:0}; months[m].s += historyData[k].percent; months[m].c++; });
+                        Object.keys(months).sort().slice(-6).forEach(m => data.push({ label: `${parseInt(m.split('-')[1])}월`, value: Math.round(months[m].s/months[m].c) }));
+                    } else {
+                        const years = {}; dateKeys.forEach(k => { const y = k.substring(0, 4); if(!years[y]) years[y] = {s:0,c:0}; years[y].s += historyData[k].percent; years[y].c++; });
+                        Object.keys(years).sort().slice(-5).forEach(y => data.push({ label: y, value: Math.round(years[y].s/years[y].c) }));
+                    }
+                    return data;
+                };
+
+                return (
+                    <div className="max-w-2xl mx-auto pb-20 px-4">
+                        <div className="flex justify-between items-center mt-8 mb-6">
+                            <div><h2 className="text-2xl font-black text-slate-800">SRS Master 🧠</h2><p className="text-slate-500 text-sm">빠른 로딩 & 스마트 복습</p></div>
+                            <div className="flex flex-col items-center bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100"><Flame className="text-orange-500 mb-1" size={20}/><span className="font-bold text-orange-700 text-sm">{streak}일째</span></div>
+                        </div>
+                        <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center mb-6">
+                            <Search className="text-slate-400 ml-3" size={20}/>
+                            <input className="flex-1 p-3 outline-none text-sm" placeholder="단어 검색 (DB+사전)" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}/>
+                            <button onClick={() => {setMode('dictionary'); handleSearch();}} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold">검색</button>
+                        </div>
+                        {isUploading && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                                <div className="bg-white p-6 rounded-3xl shadow-2xl text-center w-64">
+                                    <Loader2 className="animate-spin mx-auto mb-4 text-indigo-600" size={40}/>
+                                    <h3 className="font-bold text-lg mb-1">데이터 처리 중...</h3>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden"><div className="bg-indigo-600 h-full transition-all duration-300" style={{width: `${uploadProgress}%`}}></div></div>
+                                    <p className="text-xs text-slate-400 mt-2">{uploadProgress}% 완료</p>
+                                </div>
+                            </div>
+                        )}
+                        <div className="bg-white p-6 rounded-3xl border border-dashed border-slate-300 text-center mb-4">
+                            <h3 className="font-bold text-slate-700 mb-2 flex items-center justify-center gap-2"><UploadCloud/> 데이터 관리</h3>
+                            <div className="flex flex-wrap justify-center gap-2 mb-2">
+                                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                                <button onClick={handleGitHubSeed} className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 flex items-center gap-2"><Github size={16}/> GitHub 동기화</button>
+                                <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-bold text-sm hover:bg-indigo-100 flex items-center gap-2"><FileText size={16}/> 파일 선택</button>
+                                {totalWordsCount > 0 && <button onClick={clearData} className="px-4 py-2 bg-white text-red-500 border border-red-200 rounded-lg font-bold text-sm hover:bg-red-50"><Trash2 size={16}/></button>}
+                            </div>
+                            {uploadStatus && <div className="mt-3"><div className="text-sm font-bold text-indigo-600 animate-pulse mb-1">{uploadStatus}</div></div>}
+                            <div className="mt-2 text-xs text-slate-400">총 단어: {totalWordsCount}개 / 오늘 복습: {dueWords.length}개</div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <button onClick={startRoutine} className={`p-5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-3xl shadow-lg hover:translate-y-[-2px] transition-transform text-left`}>
+                                <div className="flex justify-between mb-6"><div className="p-2 bg-white/20 rounded-xl"><Play fill="currentColor" size={20}/></div></div>
+                                <div className="font-bold text-xl">오늘의 학습 시작</div>
+                                <div className="text-white/70 text-sm mt-1">{dueWords.length===0 ? '단어장 비어있음' : `할당량: ${Math.min(100, dueWords.length)}개`}</div>
+                            </button>
+                            <button onClick={() => wrongWords.length > 0 && setMode('wrong_review')} className="p-5 bg-white border-2 border-slate-100 rounded-3xl text-left hover:border-orange-200 transition-colors">
+                                <div className="flex justify-between mb-6"><div className={`p-2 rounded-xl ${wrongWords.length>0?'bg-orange-100 text-orange-600':'bg-slate-100 text-slate-400'}`}><AlertCircle size={20}/></div><span className="text-xs font-bold text-slate-400">{wrongWords.length} Words</span></div>
+                                <div className="font-bold text-xl text-slate-800">오답 노트</div>
+                                <div className="text-slate-400 text-sm mt-1">틀린 단어 다시 보기</div>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full">
+                                <div className="flex justify-between items-center mb-6 h-8 shrink-0">
+                                    <h3 className="font-bold text-lg flex items-center gap-2"><CalIcon className="text-indigo-600"/> 캘린더</h3>
+                                    <div className="flex gap-1"><button onClick={prevMonth}><ChevronLeft size={16}/></button><span className="text-xs font-bold w-12 text-center">{month+1}월</span><button onClick={nextMonth}><ChevronRight size={16}/></button></div>
+                                </div>
+                                <div className="grid grid-cols-7 gap-1 text-center text-xs flex-1 content-start">
+                                    {['일','월','화','수','목','금','토'].map(d=><div key={d} className="text-slate-400 font-bold py-1">{d}</div>)}
+                                    {days.map((d,i)=>(<div key={i} className={`aspect-square rounded flex items-center justify-center relative ${d?historyData[`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`]?.completed?'bg-green-100 text-green-700 font-bold':'bg-slate-50 text-slate-400':''}`}>{d}</div>))}
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full">
+                                <div className="flex justify-between items-center mb-6 h-8 shrink-0">
+                                    <h3 className="font-bold text-lg flex items-center gap-2"><TrendingUp className="text-indigo-600"/> 성취도</h3>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                                        {['week','month','year'].map(t=>(<button key={t} onClick={()=>setChartTab(t)} className={`px-2 py-1 text-[10px] font-bold rounded ${chartTab===t?'bg-white shadow text-indigo-600':'text-slate-400'}`}>{t.toUpperCase()}</button>))}
+                                    </div>
+                                </div>
+                                <div className="flex-1 flex items-center justify-center"><SimpleLineChart data={getChartData()} /></div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderStudyView = () => (
+                <div className="max-w-3xl mx-auto h-full flex flex-col animate-fade-in relative pt-20 pb-28">
+                    <div className="fixed top-4 right-4 z-50 pointer-events-none"><div className="bg-indigo-600 text-white font-mono text-xl font-bold px-4 py-2 rounded-full shadow-2xl border-2 border-indigo-400 flex items-center gap-2 animate-pulse-slow"><Clock size={18}/>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div></div>
+                    <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
+                        {currentTestWords.map((w,i)=>(
+                            <div key={w.id} className="flex items-center p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex flex-col items-center justify-center w-12 shrink-0 border-r border-slate-100 pr-3 mr-3 gap-1">
+                                    <span className="text-sm font-black text-slate-300">{i+1}</span>
+                                    <div className={`transition-opacity duration-300 ${hideTerm ? 'opacity-0' : 'opacity-100'}`}><LevelBadge level={w.level}/><StatBadge correct={w.correctCount} total={w.totalAttempts}/></div>
+                                </div>
+                                <div className={`flex-1 transition-opacity duration-300 ${hideTerm ? 'opacity-0' : 'opacity-100'}`}><span className="font-bold text-xl text-slate-800 break-words">{w.term}</span></div>
+                                <div className={`flex-1 text-right transition-opacity duration-300 ${hideDef ? 'opacity-0' : 'opacity-100'}`}><span className="text-indigo-600 font-medium text-lg break-keep">{w.definition}</span></div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-3 z-50 shadow-lg-up safe-area-pb"><div className="max-w-3xl mx-auto flex gap-2 h-14"><button onClick={startTest} className="flex-[2] bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 flex items-center justify-center gap-2 active:scale-95"><CheckCircle size={20}/> 시험 보기</button><button onClick={()=>setHideTerm(!hideTerm)} className={`flex-1 font-bold rounded-xl border flex flex-col items-center justify-center text-[10px] gap-1 ${hideTerm?'bg-slate-800 text-white':'bg-white text-slate-600'}`}>{hideTerm?<EyeOff size={18}/>:<Eye size={18}/>} 단어</button><button onClick={()=>setHideDef(!hideDef)} className={`flex-1 font-bold rounded-xl border flex flex-col items-center justify-center text-[10px] gap-1 ${hideDef?'bg-slate-800 text-white':'bg-white text-slate-600'}`}>{hideDef?<EyeOff size={18}/>:<Eye size={18}/>} 뜻</button></div></div>
+                </div>
+            );
+
+            const renderTestView = () => (
+                <div className="max-w-3xl mx-auto h-full flex flex-col animate-fade-in relative pt-20 pb-20">
+                    <div className="fixed top-4 right-4 z-50 pointer-events-none"><div className="bg-rose-600 text-white font-mono text-xl font-bold px-4 py-2 rounded-full shadow-2xl border-2 border-rose-400 flex items-center gap-2"><Clock size={18}/>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div></div>
+                    <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+                        {currentTestWords.map((w,i)=>(<div key={w.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center gap-2"><div className="flex items-center gap-2 w-full sm:w-1/3"><span className="w-8 text-sm font-black text-slate-300 text-center shrink-0 border-r border-slate-100 pr-2">{i+1}</span><span className="font-bold text-slate-800 text-lg">{w.term}</span></div><input className="flex-1 w-full border-b-2 border-slate-200 p-2 bg-transparent focus:border-rose-500 focus:outline-none text-base" placeholder="뜻 입력" value={userAnswers[w.id]||''} onChange={e=>setUserAnswers({...userAnswers,[w.id]:e.target.value})} autoComplete="off" onKeyDown={(e) => { if(e.key === 'Enter') e.preventDefault(); }}/></div>))}
+                    </div>
+                    <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-50 shadow-lg-up"><div className="max-w-3xl mx-auto"><button onClick={submitTest} className="w-full py-4 text-white font-bold rounded-xl shadow-lg bg-rose-600 hover:bg-rose-700 active:scale-95">제출하기</button></div></div>
+                </div>
+            );
+
+            const renderResultView = () => (
+                <div className="max-w-2xl mx-auto bg-white min-h-screen p-6 pb-20">
+                    <div className="text-center py-8"><div className="inline-block p-4 bg-yellow-50 rounded-full mb-4 animate-bounce"><CheckCircle size={48} className="text-yellow-500"/></div><h2 className="text-3xl font-black text-slate-800 mb-2">점수: {score} / {currentTestWords.length}</h2></div>
+                    <div className="bg-slate-50 rounded-3xl p-6 mb-6">
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
+                            {currentTestWords.length === 0 ? <p className="text-center text-slate-400 p-4">결과 데이터 없음</p> : 
+                            currentTestWords.map(w => {
+                                const res = gradedResults[w.id] || { isCorrect: false };
+                                if(!isRetest && res.isCorrect && res.type === 'exact') return null;
+                                return (
+                                    <div key={w.id} className={`flex justify-between items-center p-3 rounded-xl border ${res.isCorrect ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                                        <div><div className="flex items-center gap-2 mb-1"><span className="font-bold text-slate-800">{w.term}</span><LevelBadge level={w.level}/></div><span className={`${res.isCorrect ? 'text-green-700' : 'text-red-500 line-through'}`}>{userAnswers[w.id]||'(미입력)'}</span></div><span className="text-xs text-slate-500 text-right ml-2">{w.definition}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div className="fixed bottom-6 left-6 right-6 max-w-2xl mx-auto"><button onClick={()=>setMode('dashboard')} className="w-full py-4 bg-slate-800 text-white font-bold rounded-2xl shadow-lg active:scale-95">메인으로</button></div>
+                </div>
+            );
+
+            const renderWrongReviewView = () => (
+                <div className="max-w-2xl mx-auto p-4 pt-8 h-screen flex flex-col">
+                    <div className="flex justify-between items-center mb-6"><h2 className="font-bold text-2xl flex items-center gap-2"><AlertCircle className="text-orange-600"/> 오답 노트</h2><button onClick={()=>setMode('dashboard')} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">✕</button></div>
+                    <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-6 text-white mb-6 shadow-lg"><div className="flex justify-between items-end"><div><p className="opacity-80 text-sm mb-1">총 틀린 단어</p><div className="text-4xl font-black">{wrongWords.length}개</div></div><button onClick={startWrongRetest} className="px-5 py-2 bg-white text-orange-600 font-bold rounded-xl hover:bg-orange-50 flex items-center gap-2 active:scale-95"><Play size={16}/> 재시험</button></div></div>
+                    <div className="flex-1 overflow-y-auto space-y-2 pb-10 pr-1 custom-scrollbar">{wrongWords.map(w=>(<div key={w.id} className="p-4 bg-white border border-slate-200 rounded-2xl flex justify-between items-center shadow-sm"><div><div className="flex items-center gap-2"><div className="font-bold text-lg text-slate-800">{w.term}</div><LevelBadge level={w.level}/></div><div className="text-sm text-slate-500 mt-1">정답: {w.definition}</div><div className="text-xs text-red-400 mt-1">답: {w.userWrongAnswer || '미입력'}</div></div></div>))}</div>
+                </div>
+            );
+
+            const DictionaryView = () => (
+                <div className="max-w-xl mx-auto py-10 px-6">
+                    <button onClick={() => setMode('dashboard')} className="mb-6 flex items-center text-slate-500 hover:text-slate-800"><ChevronLeft/> 메인으로</button>
+                    <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 text-center">
+                        <Book className="mx-auto text-indigo-600 mb-4" size={48}/>
+                        <h2 className="text-3xl font-black text-slate-800 mb-2">{searchResult?.term || searchTerm}</h2>
+                        <div className="w-12 h-1 bg-indigo-100 mx-auto mb-6 rounded-full"></div>
+                        <p className="text-lg text-slate-600 font-medium leading-relaxed">{searchResult?.definition || "검색 중..."}</p>
+                        <div className="mt-6 pt-6 border-t border-slate-100">
+                            <a href={`https://dict.naver.com/search.dict?dicQuery=${searchTerm}`} target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline text-sm">네이버 사전 더 보기 →</a>
+                        </div>
+                    </div>
+                </div>
+            );
 
             // --- Render ---
             if (appError) return <div className="flex flex-col items-center justify-center h-screen text-center p-4"><AlertCircle className="text-red-500 mb-4" size={48} /><p className="text-slate-500 mb-6 max-w-md">{appError}</p><button onClick={()=>window.location.reload()} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold">새로고침</button></div>;
@@ -595,4 +781,5 @@
     </script>
 </body>
 </html>
+
 
