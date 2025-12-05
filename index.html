@@ -358,7 +358,26 @@ const LoginView = ({ setMode }) => {
                     fetchMissing();
                 }
             }, [mode, currentTestWords]);
+// Auth Check (수정 완료: 자동 로그인 실행 코드 삭제함)
+            useEffect(() => {
+                if (initError) { setAppError(initError); return; }
+                if (!auth) { if (!appError) setMode('login'); return; }
 
+                // ★ 문제의 원인이던 signInWithRedirect 줄을 삭제했습니다.
+                // 이제 앱을 켜도 자동으로 로그인 창으로 넘어가지 않습니다.
+
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        setMode('dashboard');
+                    } else {
+                        setMode('login');
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
+
+            
             useEffect(() => {
                 let interval = null;
                 if (isActive && timeLeft > 0) interval = setInterval(() => setTimeLeft(t => t-1), 1000);
@@ -942,6 +961,7 @@ const LoginView = ({ setMode }) => {
     </script>
 </body>
 </html>
+
 
 
 
