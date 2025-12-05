@@ -282,7 +282,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const [isUploading, setIsUploading] = useState(false);
             const [uploadProgress, setUploadProgress] = useState(0);
             const [uploadStatus, setUploadStatus] = useState('');
-            const [appError, setAppError] = useState(initError);
+            const [appError, ] = useState(initError);
             
             // Test States
             const [hideTerm, setHideTerm] = useState(false);
@@ -301,24 +301,27 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const initialLoadComplete = useRef(false);
             const loadTimerRef = useRef(null);
 
-            // Auth Check
-            useEffect(() => {
-                if (initError) { setAppError(initError); return; }
-                if (!auth) { if (!appError) setMode('login'); return; }
-
-                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    setUser(currentUser);
-                    if (currentUser) {
-                        if (!initialLoadComplete.current) {
-                            initialLoadComplete.current = true;
-                            setMode('dashboard');
-                        }
-                    } else {
-                        setMode('login');
-                    }
-                });
-                return () => unsubscribe();
-            }, []);
+        // Auth Check (수정된 버전)
+        useEffect(() => {
+            if (initError) { setAppError(initError); return; }
+            if (!auth) { if (!appError) setMode('login'); return; }
+        
+            // ★ 추가: 리다이렉트 로그인 실패 원인을 파악하기 위해 에러를 캡처합니다 (선택사항)
+            signInWithRedirect(auth, new GoogleAuthProvider()).catch(e => console.log(e)); // 이 줄은 참고용이며, 실제 로직은 아래 리스너가 처리함
+        
+            const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                setUser(currentUser);
+                if (currentUser) {
+                    // ★ 수정: initialLoadComplete 체크 제거
+                    // 유저가 있으면 무조건 대시보드로 보냅니다.
+                    // (데이터 로딩은 백그라운드에서 일어나거나 로딩 상태를 따로 관리하는 것이 안전합니다)
+                    setMode('dashboard');
+                } else {
+                    setMode('login');
+                }
+            });
+            return () => unsubscribe();
+        }, []);
 
             // Data Sync
             useEffect(() => {
@@ -954,6 +957,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
     </script>
 </body>
 </html>
+
 
 
 
