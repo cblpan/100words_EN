@@ -36,7 +36,8 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "firebase/app";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, deleteUser } from "firebase/auth";
+// signInWithRedirect 추가 (signInWithPopup은 지워도 됩니다)
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from "firebase/auth";
         import { getFirestore, collection, doc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot, getDocs, getCountFromServer, deleteDoc, updateDoc } from "firebase/firestore";
 
         // ★ 사용자 설정 적용됨 ★
@@ -217,17 +218,20 @@
                 }
             };
 
-            const handleGoogle = () => {
+            const handleGoogle = () => {    
                 if(isLoading) return;
                 setError('');
                 setIsLoading(true);
                 const provider = new GoogleAuthProvider();
-                signInWithPopup(auth, provider)
+                
+                // ★ 여기를 Popup -> Redirect로 변경 ★
+                signInWithRedirect(auth, provider)
                     .catch((e) => {
                         console.error(e);
-                        setError("Google 로그인 실패. 팝업 차단을 확인하세요.");
+                        setError("Google 로그인 전환 실패: " + e.message);
                         setIsLoading(false);
                     });
+                // Redirect 방식은 페이지가 이동되므로 여기서 setIsLoading(false)를 할 필요가 없습니다.
             };
 
             return (
@@ -759,12 +763,10 @@
                             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full">
                                 <div className="flex justify-between items-center mb-4 h-8 shrink-0">
                                     <h3 className="font-bold text-lg flex items-center gap-2"><CalIcon className="text-indigo-600"/> 캘린더</h3>
-                                    <div className="flex items-center gap-2 text-xs font-bold">
-                                        <button onClick={prevYear} className="px-1 py-0.5 rounded hover:bg-slate-100">-1Y</button>
+                                    <div className="flex items-center gap-2 text-xs font-bold"> 
                                         <button onClick={prevMonth} className="px-1 py-0.5 rounded hover:bg-slate-100"><ChevronLeft size={16}/></button>
                                         <span className="px-2 text-center whitespace-nowrap">{year}년 {month+1}월</span>
-                                        <button onClick={nextMonth} className="px-1 py-0.5 rounded hover:bg-slate-100"><ChevronRight size={16}/></button>
-                                        <button onClick={nextYear} className="px-1 py-0.5 rounded hover:bg-slate-100">+1Y</button>
+                                        <button onClick={nextMonth} className="px-1 py-0.5 rounded hover:bg-slate-100"><ChevronRight size={16}/></button> 
                                     </div>
                                 </div>
                                 <div className="flex-1 flex flex-col">
@@ -952,5 +954,6 @@
     </script>
 </body>
 </html>
+
 
 
