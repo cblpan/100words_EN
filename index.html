@@ -36,8 +36,7 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from "firebase/app";
-// signInWithRedirect 추가 (signInWithPopup은 지워도 됩니다)
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, deleteUser, signInAnonymously } from "firebase/auth";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, deleteUser, signInAnonymously } from "firebase/auth";
         import { getFirestore, collection, doc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot, getDocs, getCountFromServer, deleteDoc, updateDoc } from "firebase/firestore";
 
         // ★ 사용자 설정 적용됨 ★
@@ -193,8 +192,8 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 
         const LevelBadge = ({level}) => <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border block w-fit mt-1 ${level==='C2'?'bg-red-50 text-red-600 border-red-100':level==='C1'?'bg-orange-50 text-orange-600 border-orange-100':'bg-blue-50 text-blue-600 border-blue-100'}`}>{level||'?'}</span>;
         const StatBadge = ({correct, total}) => total ? <span className={`text-[10px] font-mono px-1 rounded border block w-fit mt-1 ${correct/total>=0.8?'text-green-600 border-green-100 bg-green-50':'text-red-500 border-red-100 bg-red-50'}`}>{Math.round((correct/total)*100)}%</span> : <span className="text-[10px] bg-slate-100 text-slate-400 px-1 rounded block w-fit mt-1 border border-slate-200">New</span>;
- 
-// --- Login Component (익명 로그인 추가됨) ---
+
+        // --- Login Component (익명 로그인 추가 및 리다이렉트 문제 해결) ---
         const LoginView = ({ setMode }) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -202,7 +201,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const [error, setError] = useState('');
             const [isLoading, setIsLoading] = useState(false);
 
-            // 이메일 로그인
             const handleEmailAuth = async () => {
                 if(isLoading) return;
                 setError('');
@@ -219,7 +217,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                 }
             };
 
-            // 구글 로그인 (팝업)
             const handleGoogle = async () => {    
                 if(isLoading) return;
                 setError('');
@@ -234,7 +231,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                 }
             };
 
-            // ★ 익명(비회원) 로그인 추가 ★
             const handleAnonymous = async () => {
                 if(isLoading) return;
                 setError('');
@@ -259,25 +255,19 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                             <input type="email" placeholder="이메일" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all"/>
                             <input type="password" placeholder="비밀번호 (6자리 이상)" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={e=>e.key==='Enter' && handleEmailAuth()}/>
                             {error && <p className="text-red-500 text-sm text-center font-bold">{error}</p>}
-                            
                             <button onClick={handleEmailAuth} disabled={isLoading} className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${isLoading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
                                 {isLoading ? <><Loader2 size={20}/> 처리 중...</> : (isSignUp ? '회원가입' : '로그인')}
                             </button>
-                            
                             <div className="relative my-6"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-slate-400">또는</span></div></div>
-                            
                             <button onClick={handleGoogle} disabled={isLoading} className="w-full py-4 bg-white border-2 border-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
                                 {isLoading ? <Loader2 size={20} className="text-slate-400"/> : 
                                 <><svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Google로 계속하기</>
                                 }
                             </button>
-
-                            {/* 비회원 로그인 버튼 */}
-                            <button onClick={handleAnonymous} disabled={isLoading} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors">
+                            <button onClick={handleAnonymous} disabled={isLoading} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors mt-2">
                                 비회원으로 시작하기
                             </button>
-
-                            <p className="text-center text-sm text-slate-400 mt-2">
+                            <p className="text-center text-sm text-slate-400 mt-4">
                                 {isSignUp ? '이미 계정이 있나요?' : '아직 계정이 없나요?'} 
                                 <button onClick={()=>setIsSignUp(!isSignUp)} className="ml-1 text-indigo-600 font-bold hover:underline">{isSignUp ? '로그인' : '회원가입'}</button>
                             </p>
@@ -305,7 +295,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const [isUploading, setIsUploading] = useState(false);
             const [uploadProgress, setUploadProgress] = useState(0);
             const [uploadStatus, setUploadStatus] = useState('');
-            const [appError, ] = useState(initError);
+            const [appError, setAppError] = useState(initError);
             
             // Test States
             const [hideTerm, setHideTerm] = useState(false);
@@ -323,7 +313,22 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const fileInputRef = useRef(null);
             const initialLoadComplete = useRef(false);
             const loadTimerRef = useRef(null);
- 
+
+            // Auth Check
+            useEffect(() => {
+                if (initError) { setAppError(initError); return; }
+                if (!auth) { if (!appError) setMode('login'); return; }
+
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        setMode('dashboard');
+                    } else {
+                        setMode('login');
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
 
             // Data Sync
             useEffect(() => {
@@ -375,26 +380,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                     fetchMissing();
                 }
             }, [mode, currentTestWords]);
-// Auth Check (수정 완료: 자동 로그인 실행 코드 삭제함)
-            useEffect(() => {
-                if (initError) { setAppError(initError); return; }
-                if (!auth) { if (!appError) setMode('login'); return; }
 
-                // ★ 문제의 원인이던 signInWithRedirect 줄을 삭제했습니다.
-                // 이제 앱을 켜도 자동으로 로그인 창으로 넘어가지 않습니다.
-
-                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    setUser(currentUser);
-                    if (currentUser) {
-                        setMode('dashboard');
-                    } else {
-                        setMode('login');
-                    }
-                });
-                return () => unsubscribe();
-            }, []);
-
-            
             useEffect(() => {
                 let interval = null;
                 if (isActive && timeLeft > 0) interval = setInterval(() => setTimeLeft(t => t-1), 1000);
@@ -522,23 +508,18 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
             const startRoutine = async () => {
                 const todayStr = new Date().toISOString().split('T')[0];
 
-                // 하루에 한 번만 100개 학습 + 테스트 가능
                 if (historyData[todayStr]?.completed) {
                     alert("오늘 할당된 100개 학습과 테스트를 이미 마쳤습니다.\n\n다음날 다시 학습을 시작해 주세요.\n지금은 오답 복습만 가능합니다.");
                     return;
                 }
 
-                // 단어장이 비어 있으면 안내
                 if (totalWordsCount === 0) {
                     alert("단어장이 비어 있습니다.\n\n먼저 GitHub 동기화나 CSV 업로드로 단어를 추가한 뒤 학습을 시작해 주세요.");
                     return;
                 }
 
-                // 기본은 오늘 복습 대상(dueWords)을 우선 사용
                 let sessionWords = dueWords;
 
-                // 아직 nextReviewDate 기반 복습 데이터가 없으면,
-                // 전체 vocabulary 중에서 랜덤으로 후보를 가져와서 첫 학습 세션 구성
                 if (!sessionWords || sessionWords.length === 0) {
                     try {
                         const snap = await getDocs(
@@ -560,7 +541,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                     }
                 }
 
-                // 오늘 학습 세션: 최대 100개만
                 const selected = sessionWords
                     .slice()
                     .sort(() => Math.random() - 0.5)
@@ -609,6 +589,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                             batch.update(wRef, { correctCount: (w.correctCount||0)+(res.isCorrect?1:0), totalAttempts: (w.totalAttempts||0)+1, interval: nInt, nextReviewDate: nDate });
                         }
                     });
+                    // ★ 수정됨: 재시험(isRetest)일 경우, 점수 기록(history)을 저장하지 않음.
                     if (!isRetest) {
                         const hRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', todayStr);
                         batch.set(hRef, { score: c, total: currentTestWords.length, percent: Math.round((c/currentTestWords.length)*100), timestamp: serverTimestamp(), completed: true });
@@ -660,13 +641,11 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                     setUploadProgress(10);
 
                     const basePath = ['artifacts', appId, 'users', user.uid];
-
-                    // 컬렉션을 작은 청크(최대 300개) 단위로 반복 삭제
                     const deleteCollectionInChunks = async (name) => {
                         const baseCol = collection(db, ...basePath, name);
                         let deletedAny = false;
                         let safety = 0;
-                        while (safety < 50) { // 안전장치
+                        while (safety < 50) { 
                             const snap = await getDocs(query(baseCol, limit(300)));
                             if (snap.empty) break;
                             deletedAny = true;
@@ -688,8 +667,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 
                     setUploadStatus('Firebase 계정 삭제 중...');
                     setUploadProgress(80);
-
-                    // Firebase Auth 계정 삭제
                     await deleteUser(auth.currentUser);
 
                     alert("계정이 성공적으로 삭제되었습니다.");
@@ -708,7 +685,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                 }
             };
 
-            // --- Views (Restored to Original Style) ---
+            // --- Views ---
             const DashboardView = () => {
                 const today = new Date();
                 const year = currentDate.getFullYear();
@@ -722,9 +699,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                 
                 const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
                 const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-                const prevYear = () => setCurrentDate(new Date(year - 1, month, 1));
-                const nextYear = () => setCurrentDate(new Date(year + 1, month, 1));
-
+                
                 const getChartData = () => {
                     const data = []; const dateKeys = Object.keys(historyData).sort();
                     if (chartTab === 'week') {
@@ -869,11 +844,29 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                 </div>
             );
 
+            // ★ UI 수정됨: 긴 단어 처리를 위한 레이아웃 개선
             const renderTestView = () => (
                 <div className="max-w-3xl mx-auto h-full flex flex-col animate-fade-in relative pt-20 pb-20">
                     <div className="fixed top-4 right-4 z-50 pointer-events-none"><div className="bg-rose-600 text-white font-mono text-xl font-bold px-4 py-2 rounded-full shadow-2xl border-2 border-rose-400 flex items-center gap-2"><Clock size={18}/>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div></div>
                     <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
-                        {currentTestWords.map((w,i)=>(<div key={w.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center gap-2"><div className="flex items-center gap-2 w-full sm:w-1/3"><span className="w-8 text-sm font-black text-slate-300 text-center shrink-0 border-r border-slate-100 pr-2">{i+1}</span><span className="font-bold text-slate-800 text-lg">{w.term}</span></div><input className="flex-1 w-full border-b-2 border-slate-200 p-2 bg-transparent focus:border-rose-500 focus:outline-none text-base" placeholder="뜻 입력" value={userAnswers[w.id]||''} onChange={e=>setUserAnswers({...userAnswers,[w.id]:e.target.value})} autoComplete="off" onKeyDown={(e) => { if(e.key === 'Enter') e.preventDefault(); }}/></div>))}
+                        {currentTestWords.map((w,i)=>(
+                            <div key={w.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4">
+                                {/* 단어 영역: 모바일은 위, PC는 왼쪽 / 긴 단어 줄바꿈(break-all) */}
+                                <div className="flex items-center gap-2 w-full sm:w-auto min-w-[30%]">
+                                    <span className="w-8 text-sm font-black text-slate-300 text-center shrink-0 border-r border-slate-100 pr-2">{i+1}</span>
+                                    <span className="font-bold text-lg text-slate-800 break-all leading-tight">{w.term}</span>
+                                </div>
+                                {/* 입력창 영역: 남은 공간 모두 차지 (flex-1) */}
+                                <input 
+                                    className="flex-1 w-full border-b-2 border-slate-200 p-2 bg-transparent focus:border-rose-500 focus:outline-none text-base transition-colors" 
+                                    placeholder="뜻 입력" 
+                                    value={userAnswers[w.id]||''} 
+                                    onChange={e=>setUserAnswers({...userAnswers,[w.id]:e.target.value})} 
+                                    autoComplete="off" 
+                                    onKeyDown={(e) => { if(e.key === 'Enter') e.preventDefault(); }}
+                                />
+                            </div>
+                        ))}
                     </div>
                     <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 z-50 shadow-lg-up"><div className="max-w-3xl mx-auto"><button onClick={submitTest} className="w-full py-4 text-white font-bold rounded-xl shadow-lg bg-rose-600 hover:bg-rose-700 active:scale-95">제출하기</button></div></div>
                 </div>
@@ -943,7 +936,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
                             <div className="max-w-3xl mx-auto flex flex-col items-center py-2 gap-1">
                                 <div className="text-[10px] text-slate-400 font-bold">Logged in as</div>
                                 <div className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mb-1">
-                                    {user.email}
+                                    {user.email || '익명 사용자'}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
@@ -978,12 +971,3 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
