@@ -851,27 +851,29 @@
                 </div>
             );
 
-            // ★ UI 수정됨: 긴 단어 처리를 위한 레이아웃 개선
+            // ★ UI 수정됨: 긴 단어 겹침 방지를 위해 위아래 배치로 변경
             const renderTestView = () => (
                 <div className="max-w-3xl mx-auto h-full flex flex-col animate-fade-in relative pt-20 pb-20">
                     <div className="fixed top-4 right-4 z-50 pointer-events-none"><div className="bg-rose-600 text-white font-mono text-xl font-bold px-4 py-2 rounded-full shadow-2xl border-2 border-rose-400 flex items-center gap-2"><Clock size={18}/>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div></div>
                     <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
                         {currentTestWords.map((w,i)=>(
-                            <div key={w.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4">
-                                {/* 단어 영역: 모바일은 위, PC는 왼쪽 / 긴 단어 줄바꿈(break-all) */}
-                                <div className="flex items-center gap-2 w-full sm:w-auto min-w-[30%]">
-                                    <span className="w-8 text-sm font-black text-slate-300 text-center shrink-0 border-r border-slate-100 pr-2">{i+1}</span>
-                                    <span className="font-bold text-lg text-slate-800 break-all leading-tight">{w.term}</span>
+                            <div key={w.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                                {/* 단어 영역: 위쪽에 배치, 긴 단어는 자동 줄바꿈 */}
+                                <div className="flex items-start gap-2">
+                                    <span className="mt-1 w-6 text-sm font-black text-slate-300 text-center shrink-0">{i+1}</span>
+                                    <span className="font-bold text-xl text-slate-800 break-all leading-snug">{w.term}</span>
                                 </div>
-                                {/* 입력창 영역: 남은 공간 모두 차지 (flex-1) */}
-                                <input 
-                                    className="flex-1 w-full border-b-2 border-slate-200 p-2 bg-transparent focus:border-rose-500 focus:outline-none text-base transition-colors" 
-                                    placeholder="뜻 입력" 
-                                    value={userAnswers[w.id]||''} 
-                                    onChange={e=>setUserAnswers({...userAnswers,[w.id]:e.target.value})} 
-                                    autoComplete="off" 
-                                    onKeyDown={(e) => { if(e.key === 'Enter') e.preventDefault(); }}
-                                />
+                                {/* 입력창 영역: 아래쪽에 배치 (겹침 원천 차단) */}
+                                <div className="pl-8"> 
+                                    <input 
+                                        className="w-full border-b-2 border-slate-200 p-2 bg-slate-50 focus:bg-white focus:border-rose-500 focus:outline-none text-base transition-colors rounded-t-md" 
+                                        placeholder="뜻 입력" 
+                                        value={userAnswers[w.id]||''} 
+                                        onChange={e=>setUserAnswers({...userAnswers,[w.id]:e.target.value})} 
+                                        autoComplete="off" 
+                                        onKeyDown={(e) => { if(e.key === 'Enter') e.preventDefault(); }}
+                                    />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -978,5 +980,6 @@
     </script>
 </body>
 </html>
+
 
 
