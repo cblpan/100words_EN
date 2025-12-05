@@ -194,8 +194,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
         const LevelBadge = ({level}) => <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border block w-fit mt-1 ${level==='C2'?'bg-red-50 text-red-600 border-red-100':level==='C1'?'bg-orange-50 text-orange-600 border-orange-100':'bg-blue-50 text-blue-600 border-blue-100'}`}>{level||'?'}</span>;
         const StatBadge = ({correct, total}) => total ? <span className={`text-[10px] font-mono px-1 rounded border block w-fit mt-1 ${correct/total>=0.8?'text-green-600 border-green-100 bg-green-50':'text-red-500 border-red-100 bg-red-50'}`}>{Math.round((correct/total)*100)}%</span> : <span className="text-[10px] bg-slate-100 text-slate-400 px-1 rounded block w-fit mt-1 border border-slate-200">New</span>;
 
-        // --- Login Component (Loading State Applied) ---
-        const // LoginView 컴포넌트 전체 교체 추천
+        // --- Login Component (Loading State Applied) --- 
 const LoginView = ({ setMode }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -963,6 +962,7 @@ const LoginView = ({ setMode }) => {
     </script>
 </body>
 </html>
+
 
 
 
