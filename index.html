@@ -239,8 +239,8 @@
                                 // 1. 익명 로그인 시도
                                 const result = await signInAnonymously(auth);
                                 
-                                // 2. 로그인된 유저에게 "익명 친구"라는 이름표 붙이기 (원하는 이름으로 변경 가능)
-                                await updateProfile(result.user, { displayName: "익명 친구" });
+                                // 2. 로그인된 유저에게 "익명"라는 이름표 붙이기 (원하는 이름으로 변경 가능)
+                                await updateProfile(result.user, { displayName: "익명이" });
                                 
                                 // 3. (옵션) 화면 갱신을 위해 상태 강제 업데이트가 필요할 수 있으나, 
                                 // 보통 onAuthStateChanged가 감지하므로 여기까지만 해도 됩니다.
@@ -943,7 +943,7 @@
                             <div className="max-w-3xl mx-auto flex flex-col items-center py-2 gap-1">
                                 <div className="text-[10px] text-slate-400 font-bold">Logged in as</div>
                                 <div className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mb-1">
-                                    {user.email || '익명 사용자'}
+                                    {user.email || user.displayName || '익명 사용자'}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
@@ -978,4 +978,5 @@
     </script>
 </body>
 </html>
+
 
